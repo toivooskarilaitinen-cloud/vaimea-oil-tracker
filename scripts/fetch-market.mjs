@@ -14,18 +14,24 @@ async function chart(symbol, range, interval) {
 }
 
 async function quote(symbol) {
-  const result = await chart(symbol, "1mo", "1h");
+  const [result, history] = await Promise.all([
+    chart(symbol, "1mo", "1h"),
+    chart(symbol, "1y", "1d"),
+  ]);
   const q = result.indicators.quote[0];
-  const points = result.timestamp.map((t, i) => [t, q.close[i]]).filter(p => Number.isFinite(p[1]));
-  const latest = points.at(-1);
-  const session = points.filter(p => p[0] >= latest[0] - 86400).map(p => p[1]);
-  const month = points.map(p => p[1]);
-  const prev = Number(result.meta.chartPreviousClose || result.meta.previousClose || points[Math.max(0, points.length - 24)][1]);
+  const recentPoints = result.timestamp.map((t, i) => [t, q.close[i]]).filter(p => Number.isFinite(p[1]));
+  const hq = history.indicators.quote[0];
+  const points = history.timestamp.map((t, i) => [t, hq.close[i]]).filter(p => Number.isFinite(p[1]));
+  const latest = recentPoints.at(-1);
+  const session = recentPoints.filter(p => p[0] >= latest[0] - 86400).map(p => p[1]);
+  const month = recentPoints.map(p => p[1]);
+  const prev = Number(result.meta.chartPreviousClose || result.meta.previousClose || recentPoints[Math.max(0, recentPoints.length - 24)][1]);
   return {
     price: latest[1], changePct: (latest[1] / prev - 1) * 100,
     dayLow: Math.min(...session), dayHigh: Math.max(...session),
     monthLow: Math.min(...month), monthHigh: Math.max(...month),
-    monthChangePct: (latest[1] / points[0][1] - 1) * 100, points,
+    monthChangePct: (latest[1] / recentPoints[0][1] - 1) * 100,
+    points, recentPoints,
   };
 }
 
@@ -52,7 +58,7 @@ const [wti, brent, wtiCurve, brentCurve] = await Promise.all([
 ]);
 if (wtiCurve.length < 12 || brentCurve.length < 12) throw new Error("Incomplete futures curve");
 
-const data = { wti, brent, curve: { wti: wtiCurve, brent: brentCurve }, asOf: Math.max(wti.points.at(-1)[0], brent.points.at(-1)[0]) };
+const data = { wti, brent, curve: { wti: wtiCurve, brent: brentCurve }, asOf: Math.max(wti.recentPoints.at(-1)[0], brent.recentPoints.at(-1)[0]) };
 await mkdir(new URL("../public/data/", import.meta.url), { recursive: true });
 await writeFile(new URL("../public/data/market.json", import.meta.url), JSON.stringify(data), "utf8");
 console.log("VAIMEA market data updated", new Date(data.asOf * 1000).toISOString());
