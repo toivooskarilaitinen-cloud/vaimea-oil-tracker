@@ -29,6 +29,8 @@ jobs:
           node-version: 22
       - name: Fetch WTI and Brent data
         run: node scripts/fetch-market.mjs
+      - name: Minimize browser refresh delay
+        run: node -e "const fs=require('fs'),p='public/index.html';fs.writeFileSync(p,fs.readFileSync(p,'utf8').replace(/setInterval\(load,\d+\)/,'setInterval(load,60000)'))"
       - uses: actions/configure-pages@v5
         with:
           enablement: true
